@@ -1,0 +1,94 @@
+apiVersion: "kubeflow.org/v1beta1"
+kind: Experiment
+metadata:
+  name: xgboost-hp-tuning
+  namespace: kubeflow
+spec:
+  objective:
+    type: maximize
+    goal: 0.9
+    objectiveMetricName: validation-auc
+    additionalMetricNames:
+      - validation-f1score
+  algorithm:
+    algorithmName: random
+  parallelTrialCount: 3
+  maxTrialCount: 12
+  maxFailedTrialCount: 3
+  parameters:
+    - name: learning_rate
+      parameterType: double
+      feasibleSpace:
+        min: "0.01"
+        max: "0.3"
+    - name: max_depth
+      parameterType: int
+      feasibleSpace:
+        min: "3"
+        max: "10" 
+    - name: n_estimators
+      parameterType: int
+      feasibleSpace:
+        min: "50"
+        max: "200"
+    - name: subsample
+      parameterType: double
+      feasibleSpace:
+        min: "0.5"
+        max: "1.0"
+    - name: colsample_bytree
+      parameterType: double
+      feasibleSpace:
+        min: "0.5"
+        max: "1.0"
+  trialTemplate:
+    primaryContainerName: xgboost
+    trialParameters:
+      - name: learningRate
+        description: Learning rate
+        reference: learning_rate
+      - name: maxDepth
+        description: Max tree depth
+        reference: max_depth
+      - name: nEstimators
+        description: Number of estimators
+        reference: n_estimators
+      - name: subsample
+        description: Subsample ratio
+        reference: subsample
+      - name: colsampleBytree
+        description: Column subsample ratio
+        reference: colsample_bytree
+    trialSpec:
+      apiVersion: batch/v1
+      kind: Job
+      spec:
+        template:
+          spec:
+            containers:
+              - name: xgboost
+                image: your-registry/xgboost-training:latest
+                command:
+                  - "python"
+                  - "-m"
+                  - "train"
+                  - "--learning_rate=${trialParameters.learningRate}"
+                  - "--max_depth=${trialParameters.maxDepth}"
+                  - "--n_estimators=${trialParameters.nEstimators}"
+                  - "--subsample=${trialParameters.subsample}"
+                  - "--colsample_bytree=${trialParameters.colsampleBytree}"
+                  - "--data_path=/mnt/data/your_dataset.csv"
+                  - "--output_path=/mnt/output"
+                volumeMounts:
+                  - name: data-volume
+                    mountPath: /mnt/data
+                  - name: output-volume
+                    mountPath: /mnt/output
+            volumes:
+              - name: data-volume
+                persistentVolumeClaim:
+                  claimName: data-pvc
+              - name: output-volume
+                persistentVolumeClaim:
+                  claimName: output-pvc
+            restartPolicy: Never 
